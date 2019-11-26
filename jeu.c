@@ -5,7 +5,7 @@
 #include "MQTTClient.h"
 #define ADDRESS     "tcp://localhost:1883"
 #define CLIENTID    "GAME"
-#define QOS         1
+#define QOS         0
 #define TIMEOUT     500L
 
 MQTTClient client;
@@ -14,6 +14,7 @@ MQTTClient_message pubmsg = MQTTClient_message_initializer;
 MQTTClient_deliveryToken token;
 
 volatile MQTTClient_deliveryToken deliveredtoken;
+
 int compteur=0;
 int start = 0;
 int nb_player = 0;
@@ -24,7 +25,7 @@ char topc[20];
 int sendMessage(char *payload, char* topic) {
 	int rc;
 	pubmsg.payload = payload;
-	pubmsg.payloadlen = strlen(payload);
+	pubmsg.payloadlen = (int)strlen(pubmsg.payload);
   pubmsg.qos = QOS;
   pubmsg.retained = 0;
  	MQTTClient_publishMessage(client, topic, &pubmsg, &token);
@@ -33,11 +34,17 @@ int sendMessage(char *payload, char* topic) {
          (int)(TIMEOUT/1000), payload, topic, CLIENTID);
   rc = MQTTClient_waitForCompletion(client, token, TIMEOUT);
   printf("Message with delivery token %d delivered\n", token);
+	return rc;
 }
 
 void delivered(void *context, MQTTClient_deliveryToken dt) {
 	printf("Message with token value %d delivery confirmed\n", dt);
   deliveredtoken = dt;
+}
+
+void connlost(void *context, char *cause) {
+	printf("\nConnection lost\n");
+	printf("     cause: %s\n", cause);
 }
 
 int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *message) {
@@ -47,33 +54,36 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
   printf("     topic: %s\n", topicName);
   printf("   message: ");
 	payloadptr = message->payload;
-	for (i = 0; i < message->payloadlen; i++) {
+	printf("%s\n", payloadptr);
+	/*for (i = 0; i < message->payloadlen; i++) {
 		putchar(*payloadptr++);
 	}
-	putchar('\n');
+	putchar('\n');*/
 
 	if (strcmp(topicName, "connect") == 0) {
 		char p[10];
 		char t[10];
 		sprintf(p, "%d", nb[nb_player]);
-		sprintf(t, "%s", message->payload);
+		sprintf(t, "%s", (char *)message->payload);
 		sendMessage(p, t);
 		nb_player++;
-	}
-	if (nb_player == 4) {
-		printf("Nb joueurs complet\n");
-		sendMessage("start", "infos");
+		if (nb_player == 4) {
+			printf("Nb joueurs complet\n");
+			sendMessage("start", "infos");
+
+		}
 	}
 
 	if (strcmp(topicName, "game") == 0) {
 		int n;
 		char player[10];
 		sscanf(message->payload, "%d %s\n", &n, player);
-		if (n == nb[compteur++]) {
+		if (n == nb[compteur]) {  // pas dans le bon ordre
 			printf("Nb OK\n");
 		} else {
 			printf("Nb KO\n");
 		}
+		compteur++;
 	}
   MQTTClient_freeMessage(&message);
   MQTTClient_free(topicName);
@@ -81,10 +91,6 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
   return 1;
 }
 
-void connlost(void *context, char *cause) {
-	printf("\nConnection lost\n");
-	printf("     cause: %s\n", cause);
-}
 
 int main(int argc, char* argv[]) {
 	int rc;
@@ -99,11 +105,11 @@ int main(int argc, char* argv[]) {
 		printf("Failed to connect, return code %d\n", rc);
     exit(EXIT_FAILURE);
   }
-	
+
   printf("Press Q<Enter> to quit\n");
-	
-  //MQTTClient_subscribe(client, "p/+", QOS);
+
   MQTTClient_subscribe(client, "connect", QOS);
+	MQTTClient_subscribe(client, "game", QOS);
 
 	// 4 nb alea
 	srand(time(NULL));
