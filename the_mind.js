@@ -5,7 +5,6 @@ var util = require("util"),
     express = require("express"),
         app = express(),
         http = require("http"),
-	sq = require('sqlite3'),
         io = require("socket.io")(http);                              // Socket.IO
 
 /**************************************************
