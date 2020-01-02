@@ -93,7 +93,7 @@ int main(int argc, char* argv[]) {
 			switch (ch) {
 				case 'p': // play
 					printf("PLAY\n");
-					sprintf(buffer, "%d", card);
+					sprintf(buffer, "%d %s", card, clientid);
 					sendMessage(buffer, "game");
 					break;
 				case 's': // shuriken

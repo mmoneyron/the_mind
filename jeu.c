@@ -5,7 +5,7 @@
 #include "MQTTClient.h"
 #define ADDRESS     "tcp://localhost:1883"
 #define CLIENTID    "GAME"
-#define QOS         1
+#define QOS         0
 #define TIMEOUT     500L
 
 MQTTClient client;
@@ -28,21 +28,35 @@ int sendMessage(char *payload, char* topic) {
   pubmsg.qos = QOS;
   pubmsg.retained = 0;
  	MQTTClient_publishMessage(client, topic, &pubmsg, &token);
- 	printf("Waiting for up to %d s for publication of %s\n"
+ 	/*printf("Waiting for up to %d s for publication of %s\n"
          "on topic %s ClientID: %s\n",
-         (int)(TIMEOUT/1000), payload, topic, CLIENTID);
+         (int)(TIMEOUT/1000), payload, topic, CLIENTID);*/
   rc = MQTTClient_waitForCompletion(client, token, TIMEOUT);
-  printf("Message with delivery token %d delivered\n", token);
+  //printf("Message with delivery token %d delivered\n", token);
 }
 
 void delivered(void *context, MQTTClient_deliveryToken dt) {
-	printf("Message with token value %d delivery confirmed\n", dt);
+	//printf("Message with token value %d delivery confirmed\n", dt);
   deliveredtoken = dt;
+}
+
+void sort() {
+	int tmp;
+	for (int i = 0; i < 3; i++) {
+		for (int j = 0; j < 3-i; j++) {
+			if (nb[j] > nb[j+1]) {
+				tmp = nb[j];
+				nb[j] = nb[j+1];
+				nb[j+1] = tmp;
+			}
+		}	
+	}
 }
 
 int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *message) {
 	int i;
 	char *payloadptr;
+	int sendCard = 0, sendStart = 0;
   printf("Message arrived\n");
   printf("     topic: %s\n", topicName);
   printf("   message: ");
@@ -53,31 +67,52 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
 	putchar('\n');
 
 	if (strcmp(topicName, "connect") == 0) {
-		char p[10];
-		char t[10];
-		sprintf(p, "%d", nb[nb_player]);
-		sprintf(t, "%s", message->payload);
-		sendMessage(p, t);
-		nb_player++;
-	}
-	if (nb_player == 4) {
-		printf("Nb joueurs complet\n");
-		sendMessage("start", "infos");
+		sendCard = 1;
 	}
 
 	if (strcmp(topicName, "game") == 0) {
 		int n;
 		char player[10];
+		char p[20];
 		sscanf(message->payload, "%d %s\n", &n, player);
 		if (n == nb[compteur++]) {
-			printf("Nb OK\n");
+			sendMessage("ok", "infos");
+			if (compteur == 4) {
+				sendMessage("WON GAME", "infos");
+			}
 		} else {
-			printf("Nb KO\n");
+			sprintf(p, "ko %s", player);
+			sendMessage(p, "infos");
 		}
+	}
+
+	if (sendCard) {
+		char p[10];
+		char t[10];
+		sprintf(p, "%d", nb[nb_player]);
+		sprintf(t, "%s", message->payload);
+		sendMessage(p, t);
+		sendCard = 0;
+		nb_player++;
+		if (nb_player == 4) {
+			printf("Nb joueurs complet\n");
+			start = 1;
+			sendStart= 1;
+			sort();
+		}
+	}
+
+	if (sendStart) {
+		//deliveredtoken = &token;
+		char p[10];
+		char t[10];
+		sprintf(p, "start");
+		sprintf(t, "infos");
+		sendMessage(p, t);
+		sendStart = 0;
 	}
   MQTTClient_freeMessage(&message);
   MQTTClient_free(topicName);
-
   return 1;
 }
 
@@ -104,6 +139,7 @@ int main(int argc, char* argv[]) {
 	
   //MQTTClient_subscribe(client, "p/+", QOS);
   MQTTClient_subscribe(client, "connect", QOS);
+  MQTTClient_subscribe(client, "game", QOS);
 
 	// 4 nb alea
 	srand(time(NULL));
@@ -119,17 +155,12 @@ int main(int argc, char* argv[]) {
 		nb[3] = rand() % 100 + 1;
 	} while (nb[0] == nb[3] || nb[1] == nb[3] || nb[2] == nb[3]);
 	printf("[ %d %d %d %d ]\n", nb[0], nb[1], nb[2], nb[3]);
-	if (start == 1) {
-		for (i = 0; i < 4; i++) {
-			sprintf(payload, "%d\n", nb[i]);
-			sprintf(topic, "p/%d\n", i);
-			sendMessage(payload, topic);
-		}
-	}
 	// start
-	//sendMessage("start", "infos");
 
 	do {
+		if (start) {
+			//sendMessage("start", "infos");
+		}
 		ch = getchar();
   } while(ch!='Q' && ch != 'q');
   MQTTClient_disconnect(client, 10000);
