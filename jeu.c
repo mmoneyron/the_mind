@@ -14,6 +14,7 @@ MQTTClient_message pubmsg = MQTTClient_message_initializer;
 MQTTClient_deliveryToken token;
 
 volatile MQTTClient_deliveryToken deliveredtoken;
+
 int compteur=0;
 int start = 0;
 int nb_player = 0;
@@ -21,17 +22,16 @@ int nb[4];
 char messg[20];
 char topc[20];
 
-int sendMessage(char *payload, char* topic) {
-	int rc;
+void sendMessage(char *payload, char* topic) {
 	pubmsg.payload = payload;
-	pubmsg.payloadlen = strlen(payload);
+	pubmsg.payloadlen = (int)strlen(pubmsg.payload);
   pubmsg.qos = QOS;
   pubmsg.retained = 0;
  	MQTTClient_publishMessage(client, topic, &pubmsg, &token);
  	/*printf("Waiting for up to %d s for publication of %s\n"
          "on topic %s ClientID: %s\n",
          (int)(TIMEOUT/1000), payload, topic, CLIENTID);*/
-  rc = MQTTClient_waitForCompletion(client, token, TIMEOUT);
+  MQTTClient_waitForCompletion(client, token, TIMEOUT);
   //printf("Message with delivery token %d delivered\n", token);
 }
 
@@ -53,18 +53,23 @@ void sort() {
 	}
 }
 
+void connlost(void *context, char *cause) {
+	printf("\nConnection lost\n");
+	printf("     cause: %s\n", cause);
+}
+
 int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *message) {
-	int i;
 	char *payloadptr;
 	int sendCard = 0, sendStart = 0;
   printf("Message arrived\n");
   printf("     topic: %s\n", topicName);
   printf("   message: ");
 	payloadptr = message->payload;
-	for (i = 0; i < message->payloadlen; i++) {
+	printf("%s\n", payloadptr);
+	/*for (i = 0; i < message->payloadlen; i++) {
 		putchar(*payloadptr++);
 	}
-	putchar('\n');
+	putchar('\n');*/
 
 	if (strcmp(topicName, "connect") == 0) {
 		sendCard = 1;
@@ -88,10 +93,8 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
 
 	if (sendCard) {
 		char p[10];
-		char t[10];
 		sprintf(p, "%d", nb[nb_player]);
-		sprintf(t, "%s", message->payload);
-		sendMessage(p, t);
+		sendMessage(p, message->payload);
 		sendCard = 0;
 		nb_player++;
 		if (nb_player == 4) {
@@ -100,15 +103,11 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
 			sendStart= 1;
 			sort();
 		}
+		compteur++;
 	}
 
 	if (sendStart) {
-		//deliveredtoken = &token;
-		char p[10];
-		char t[10];
-		sprintf(p, "start");
-		sprintf(t, "infos");
-		sendMessage(p, t);
+		sendMessage("start", "infos");
 		sendStart = 0;
 	}
   MQTTClient_freeMessage(&message);
@@ -116,15 +115,10 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
   return 1;
 }
 
-void connlost(void *context, char *cause) {
-	printf("\nConnection lost\n");
-	printf("     cause: %s\n", cause);
-}
 
 int main(int argc, char* argv[]) {
 	int rc;
   int ch;
-  int i;
   compteur=0;
   MQTTClient_create(&client, ADDRESS, CLIENTID, MQTTCLIENT_PERSISTENCE_NONE, NULL);
   conn_opts.keepAliveInterval = 200;
@@ -134,16 +128,14 @@ int main(int argc, char* argv[]) {
 		printf("Failed to connect, return code %d\n", rc);
     exit(EXIT_FAILURE);
   }
-	
+
   printf("Press Q<Enter> to quit\n");
-	
-  //MQTTClient_subscribe(client, "p/+", QOS);
+
   MQTTClient_subscribe(client, "connect", QOS);
   MQTTClient_subscribe(client, "game", QOS);
 
 	// 4 nb alea
 	srand(time(NULL));
-	char payload[4], topic[10];
 	nb[0] = rand() % 100 + 1;
 	do {
 		nb[1] = rand() % 100 + 1;

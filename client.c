@@ -3,7 +3,7 @@
 #include <string.h>
 #include "MQTTClient.h"
 #define ADDRESS     "tcp://localhost:1883"
-#define QOS         1
+#define QOS         0
 #define TIMEOUT     500L
 
 MQTTClient client;
@@ -12,28 +12,33 @@ MQTTClient_message pubmsg = MQTTClient_message_initializer;
 MQTTClient_deliveryToken token;
 
 volatile MQTTClient_deliveryToken deliveredtoken;
+
 int compteur=0;
 int start = 0;
 int card = 0;
 char clientid[10];
 
-int sendMessage(char *payload, char *topic) {
-	int rc;
+void sendMessage(char *payload, char* topic) {
 	pubmsg.payload = payload;
 	pubmsg.payloadlen = strlen(payload);
-	pubmsg.qos = QOS;
+  pubmsg.qos = QOS;
   pubmsg.retained = 0;
-	MQTTClient_publishMessage(client, topic, &pubmsg, &token);
-  printf("Waiting for up to %d seconds for publication of %s\n"
-         "on topic %s for client with ClientID: %s\n",
+ 	MQTTClient_publishMessage(client, topic, &pubmsg, &token);
+ 	printf("Waiting for up to %d s for publication of %s\n"
+         "on topic %s ClientID: %s\n",
          (int)(TIMEOUT/1000), payload, topic, clientid);
-  rc = MQTTClient_waitForCompletion(client, token, TIMEOUT);
+  MQTTClient_waitForCompletion(client, token, TIMEOUT);
   printf("Message with delivery token %d delivered\n", token);
 }
 
 void delivered(void *context, MQTTClient_deliveryToken dt) {
-  printf("Message with token value %d delivery confirmed\n", dt);
+	printf("Message with token value %d delivery confirmed\n", dt);
   deliveredtoken = dt;
+}
+
+void connlost(void *context, char *cause) {
+	printf("\nConnection lost\n");
+	printf("     cause: %s\n", cause);
 }
 
 int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *message) {
@@ -60,15 +65,10 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
   return 1;
 }
 
-void connlost(void *context, char *cause) {
-	printf("\nConnection lost\n");
-  printf("     cause: %s\n", cause);
-}
-
 int main(int argc, char* argv[]) {
   int rc;
   int ch;
-	char buffer[10];
+	char buffer[22];
 
   compteur=0;
 	strcpy(clientid, argv[1]);
@@ -81,7 +81,7 @@ int main(int argc, char* argv[]) {
 	  printf("Failed to connect, return code %d\n", rc);
     exit(EXIT_FAILURE);
   }
-	
+
   /*printf("Subscribing to topic %s\nfor client %s using QoS%d\n\n"
          "Press Q<Enter> to quit\n\n", clientid, clientid, QOS);*/
   MQTTClient_subscribe(client, clientid, QOS);
