@@ -82,7 +82,7 @@ var X = [0, 0, 0, 0];
 var Y = [0, 0, 0, 0];
 var playerOrder = [];
 
-var socket = io.connect('http://localhost:8000');
+var socket = io.connect('http://192.168.1.50:8000');
 socket.on('message', function(message) {
 	netText=message;
 	console.log(message);
@@ -130,6 +130,13 @@ var render = function () {
 			if (!playersDone[i]) {
 				if (i == PlayerID) {
   	  		ctx.drawImage(cards[i], 50, 180, 200, 310);
+					ctx.font = "30px Blade Runner Movie Font";
+					ctx.fillStyle = "rgb(255, 204, 0)";
+					if (nb_players == 4) {
+						ctx.fillText("Press on your card to play", 200, 650);
+					} else {
+						ctx.fillText("Wait for more players...", 200, 650);
+					}
 				} else {
 					ctx.drawImage(cardBack, 850, 150+200*j, 120, 180);
 					j++;
